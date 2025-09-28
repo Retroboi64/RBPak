@@ -1,0 +1,7 @@
+﻿################################################################################
+# This .gitignore file was automatically created by Microsoft(R) Visual Studio.
+################################################################################
+
+/RBPak/.vs/RBPak
+/RBPak/x64/Release
+/RBPak/RBPak/x64/Release
