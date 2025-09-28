@@ -2,7 +2,7 @@
 
 
 
-\*\*A retro-style asset packaging library for Project32 game engine\*\*
+\*\*A asset packaging library for Project32 game engine\*\*
 
 
 
