@@ -43,7 +43,7 @@ public:
     }
 };
 
-class PAK {
+class RBPak {
 private:
     static const uint32_t RBK_SIGNATURE = 0x024B5252;
     std::unordered_map<std::string, std::unique_ptr<RBKEntry>> entries_;
@@ -67,8 +67,8 @@ private:
     std::string obfuscate_filename(const std::string& original);
 
 public:
-    PAK();
-    ~PAK();
+    RBPak();
+    ~RBPak();
 
     bool add_file(const std::string& name, const std::vector<uint8_t>& data);
     bool add_file_from_disk(const std::string& name, const std::string& file_path);
@@ -87,4 +87,5 @@ public:
 
     static void print_config_info();
 
+    uint32_t hash_murmur_filename(const std::string& filename);
 };

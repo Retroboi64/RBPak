@@ -4,24 +4,24 @@
 #include <iostream>
 
 
-PAK::PAK() : encryption_initialized_(false) {
+RBPak::RBPak() : encryption_initialized_(false) {
     initialize_encryption();
 }
 
-PAK::~PAK() {
+RBPak::~RBPak() {
     if (file_stream_.is_open()) {
         file_stream_.close();
     }
 }
 
-void PAK::initialize_encryption() {
+void RBPak::initialize_encryption() {
     if (RBKConfig::ENCRYPTION_ENABLED) {
         encryption_key_ = derive_key_from_string(RBKConfig::ENCRYPTION_KEY);
         encryption_initialized_ = true;
     }
 }
 
-std::array<uint8_t, 32> PAK::derive_key_from_string(const std::string& key_string) {
+std::array<uint8_t, 32> RBPak::derive_key_from_string(const std::string& key_string) {
     std::array<uint8_t, 32> key = {};
 
     std::string current = key_string + RBKConfig::SIGNATURE_KEY;
@@ -38,9 +38,11 @@ std::array<uint8_t, 32> PAK::derive_key_from_string(const std::string& key_strin
     return key;
 }
 
-bool PAK::encrypt_data(const uint8_t* input, size_t input_size, std::vector<uint8_t>& output) {
-    if (!RBKConfig::ENCRYPTION_ENABLED || !encryption_initialized_) {
-        output.assign(input, input + input_size);
+bool RBPak::encrypt_data(const uint8_t* input, size_t input_size, std::vector<uint8_t>& output) {
+    if (!RBKConfig::ENCRYPTION_ENABLED) {
+        return true;
+    }
+    if (!encryption_initialized_) {
         return true;
     }
 
@@ -56,11 +58,8 @@ bool PAK::encrypt_data(const uint8_t* input, size_t input_size, std::vector<uint
     return false;
 }
 
-bool PAK::decrypt_data(const uint8_t* input, size_t input_size, std::vector<uint8_t>& output) {
-    if (!RBKConfig::ENCRYPTION_ENABLED || !encryption_initialized_) {
-        output.assign(input, input + input_size);
-        return true;
-    }
+bool RBPak::decrypt_data(const uint8_t* input, size_t input_size, std::vector<uint8_t>& output) {
+
 
     output.assign(input, input + input_size);
 
@@ -74,11 +73,11 @@ bool PAK::decrypt_data(const uint8_t* input, size_t input_size, std::vector<uint
     return false;
 }
 
-uint32_t PAK::calculate_crc32(const uint8_t* data, size_t length) {
+uint32_t RBPak::calculate_crc32(const uint8_t* data, size_t length) {
     return crc32(0L, data, static_cast<uInt>(length));
 }
 
-bool PAK::compress_data_level(const uint8_t* input, size_t input_size, std::vector<uint8_t>& output, int level) {
+bool RBPak::compress_data_level(const uint8_t* input, size_t input_size, std::vector<uint8_t>& output, int level) {
     uLongf compressed_size = compressBound(static_cast<uLong>(input_size));
     output.resize(compressed_size);
 
@@ -91,11 +90,11 @@ bool PAK::compress_data_level(const uint8_t* input, size_t input_size, std::vect
     return true;
 }
 
-bool PAK::compress_data(const uint8_t* input, size_t input_size, std::vector<uint8_t>& output) {
+bool RBPak::compress_data(const uint8_t* input, size_t input_size, std::vector<uint8_t>& output) {
     return compress_data_level(input, input_size, output, RBKConfig::COMPRESSION_LEVEL);
 }
 
-bool PAK::decompress_data(const uint8_t* input, size_t input_size, std::vector<uint8_t>& output, size_t expected_size) {
+bool RBPak::decompress_data(const uint8_t* input, size_t input_size, std::vector<uint8_t>& output, size_t expected_size) {
     output.resize(expected_size);
     uLongf uncompressed_size = static_cast<uLongf>(expected_size);
 
@@ -108,7 +107,7 @@ bool PAK::decompress_data(const uint8_t* input, size_t input_size, std::vector<u
     return true;
 }
 
-uint32_t PAK::hash_filename(const std::string& filename) {
+uint32_t RBPak::hash_filename(const std::string& filename) {
     uint32_t hash = 0;
     for (char c : filename) {
         hash = hash * 31 + static_cast<uint32_t>(c);
@@ -116,7 +115,7 @@ uint32_t PAK::hash_filename(const std::string& filename) {
     return hash;
 }
 
-std::string PAK::obfuscate_filename(const std::string& original) {
+std::string RBPak::obfuscate_filename(const std::string& original) {
     if (!RBKConfig::OBFUSCATE_FILENAMES) {
         return original;
     }
@@ -125,7 +124,7 @@ std::string PAK::obfuscate_filename(const std::string& original) {
     return "f_" + std::to_string(hash) + ".dat";
 }
 
-bool PAK::add_file(const std::string& name, const std::vector<uint8_t>& data) {
+bool RBPak::add_file(const std::string& name, const std::vector<uint8_t>& data) {
     if (name.empty() || data.empty()) {
         return false;
     }
@@ -144,7 +143,7 @@ bool PAK::add_file(const std::string& name, const std::vector<uint8_t>& data) {
     return true;
 }
 
-bool PAK::add_encrypted_file(const std::string& name, const std::vector<uint8_t>& data) {
+bool RBPak::add_encrypted_file(const std::string& name, const std::vector<uint8_t>& data) {
     if (!add_file(name, data)) {
         return false;
     }
@@ -153,7 +152,7 @@ bool PAK::add_encrypted_file(const std::string& name, const std::vector<uint8_t>
     return true;
 }
 
-bool PAK::add_file_from_disk(const std::string& name, const std::string& file_path) {
+bool RBPak::add_file_from_disk(const std::string& name, const std::string& file_path) {
     std::ifstream file(file_path, std::ios::binary);
     if (!file.is_open()) {
         return false;
@@ -170,7 +169,7 @@ bool PAK::add_file_from_disk(const std::string& name, const std::string& file_pa
     return add_file(name, data);
 }
 
-bool PAK::save_to_file(const std::string& file_path) {
+bool RBPak::save_to_file(const std::string& file_path) {
     std::ofstream file(file_path, std::ios::binary);
     if (!file.is_open()) {
         return false;
@@ -247,7 +246,56 @@ bool PAK::save_to_file(const std::string& file_path) {
     return true;
 }
 
-bool PAK::load_from_file(const std::string& file_path) {
+uint32_t murmur_hash3(const void* key, size_t len, uint32_t seed = 0x9747b28c) {
+    const uint8_t* data = static_cast<const uint8_t*>(key);
+    const int nblocks = static_cast<int>(len / 4);
+
+    uint32_t h1 = seed;
+
+    const uint32_t c1 = 0xcc9e2d51;
+    const uint32_t c2 = 0x1b873593;
+
+    const uint32_t* blocks = reinterpret_cast<const uint32_t*>(data + nblocks * 4);
+    for (int i = -nblocks; i; i++) {
+        uint32_t k1 = blocks[i];
+
+        k1 *= c1;
+        k1 = (k1 << 15) | (k1 >> (32 - 15));
+        k1 *= c2;
+
+        h1 ^= k1;
+        h1 = (h1 << 13) | (h1 >> (32 - 13));
+        h1 = h1 * 5 + 0xe6546b64;
+    }
+
+    const uint8_t* tail = data + nblocks * 4;
+    uint32_t k1 = 0;
+
+    switch (len & 3) {
+    case 3: k1 ^= tail[2] << 16;
+    case 2: k1 ^= tail[1] << 8;
+    case 1: k1 ^= tail[0];
+        k1 *= c1;
+        k1 = (k1 << 15) | (k1 >> (32 - 15));
+        k1 *= c2;
+        h1 ^= k1;
+    }
+
+    h1 ^= static_cast<uint32_t>(len);
+    h1 ^= h1 >> 16;
+    h1 *= 0x85ebca6b;
+    h1 ^= h1 >> 13;
+    h1 *= 0xc2b2ae35;
+    h1 ^= h1 >> 16;
+
+    return h1;
+}
+
+uint32_t RBPak::hash_murmur_filename(const std::string& filename) {
+    return murmur_hash3(filename.data(), filename.size());
+}
+
+bool RBPak::load_from_file(const std::string& file_path) {
     clear();
 
     if (file_stream_.is_open()) {
@@ -301,11 +349,11 @@ bool PAK::load_from_file(const std::string& file_path) {
     return true;
 }
 
-bool PAK::has_file(const std::string& name) const {
+bool RBPak::has_file(const std::string& name) const {
     return entries_.find(name) != entries_.end();
 }
 
-std::vector<uint8_t> PAK::get_file(const std::string& name) {
+std::vector<uint8_t> RBPak::get_file(const std::string& name) {
     auto it = entries_.find(name);
     if (it == entries_.end()) {
         return std::vector<uint8_t>();
@@ -348,7 +396,7 @@ std::vector<uint8_t> PAK::get_file(const std::string& name) {
     return entry->data;
 }
 
-std::vector<std::string> PAK::get_file_list() const {
+std::vector<std::string> RBPak::get_file_list() const {
     std::vector<std::string> file_list;
     file_list.reserve(entries_.size());
 
@@ -359,11 +407,11 @@ std::vector<std::string> PAK::get_file_list() const {
     return file_list;
 }
 
-size_t PAK::get_file_count() const {
+size_t RBPak::get_file_count() const {
     return entries_.size();
 }
 
-void PAK::clear() {
+void RBPak::clear() {
     entries_.clear();
     if (file_stream_.is_open()) {
         file_stream_.close();
@@ -371,12 +419,12 @@ void PAK::clear() {
     file_path_.clear();
 }
 
-std::vector<uint8_t> PAK::operator[](const std::string& name) {
+std::vector<uint8_t> RBPak::operator[](const std::string& name) {
     return get_file(name);
 }
 
-void PAK::print_config_info() {
-    std::cout << "RetroBoi64 Configuration:\n";
+void RBPak::print_config_info() {
+    std::cout << "RBPak Configuration:\n";
     std::cout << "  Encryption: " << (RBKConfig::ENCRYPTION_ENABLED ? "ON" : "OFF") << "\n";
     std::cout << "  Method: " << RBKConfig::ENCRYPTION_METHOD << "\n";
     std::cout << "  Compression Level: " << RBKConfig::COMPRESSION_LEVEL << "\n";

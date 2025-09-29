@@ -8,12 +8,12 @@
 #define M_PI 3.141592
 #endif
 
-static void demo_basic_usage() {
-    std::cout << "\n=== Basic RBPak Demo ===" << std::endl;
+static void example_basic_usage() {
+    std::cout << "\n=== Basic RBPak Example ===" << std::endl;
 
-    PAK pak;
+    RBPak pak;
 
-    PAK::print_config_info();
+    RBPak::print_config_info();
 
     std::vector<uint8_t> test_data = { 'H', 'e', 'l', 'l', 'o', ' ', 'R', 'B', 'K', '!' };
     std::vector<uint8_t> sprite_data;
@@ -54,7 +54,7 @@ static void demo_basic_usage() {
     }
 
     std::cout << "\n--- Loading RBK Package ---" << std::endl;
-    PAK loader;
+    RBPak loader;
     if (loader.load_from_file("demo_assets.rbk")) {
         std::cout << "* Loaded demo_assets.rbk successfully!" << std::endl;
 
@@ -86,12 +86,12 @@ static void demo_basic_usage() {
     }
 }
 
-static void demo_project32_integration() {
-    std::cout << "\n=== Project32 Engine Integration Demo ===" << std::endl;
+static void example_engine_integration() {
+    std::cout << "\n=== Engine Integration Example ===" << std::endl;
 
     class Project32AssetManager {
     private:
-        PAK sprites_, sounds_, levels_;
+        RBPak sprites_, sounds_, levels_;
 
     public:
         bool load_game_assets() {
@@ -99,7 +99,7 @@ static void demo_project32_integration() {
 
             bool success = true;
 
-            PAK demo_pack;
+            RBPak demo_pack;
             std::vector<uint8_t> demo_sprite = { 0x89, 0x50, 0x4E, 0x47 };
             std::vector<uint8_t> demo_sound = { 0x52, 0x49, 0x46, 0x46 };
 
@@ -157,7 +157,7 @@ int main(int argc, char* argv[]) {
             return 0;
         }
         else if (arg == "--config") {
-            PAK::print_config_info();
+            RBPak::print_config_info();
             return 0;
         }
     }
@@ -166,8 +166,8 @@ int main(int argc, char* argv[]) {
     std::cout << std::string(60, '=') << std::endl;
 
     try {
-        demo_basic_usage();
-        demo_project32_integration();
+        example_basic_usage();
+        example_engine_integration();
     }
     catch (const std::exception& e) {
         std::cerr << "Error: " << e.what() << std::endl;
