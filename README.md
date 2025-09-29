@@ -25,7 +25,7 @@ Created as the official asset management system for *Project32*, RBPak solves co
 
 - *Clean Code*: Dictionary-style access keeps game code readable
 
-- *Easy To Use*: Just static libary and it's headers and then you can implement a filesystem/assetmanager with RBPak
+- *Easy To Use*: Just add the static libary and it's headers and then you can implement a filesystem/assetmanager with RBPak
 
 ## About RBPak
 
