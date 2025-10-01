@@ -5,27 +5,27 @@ RBPak is a lightweight, fast asset compression and packaging library designed sp
 
 ## Features
 
-- 🗜️ *Zlib Compression* - Efficient compression reduces file sizes
+- 🗜️ **Zlib Compression** - Efficient compression reduces file sizes
 
-- 📦 *Single File Packaging* - Bundle all game assets into one `.rbk` file
+- 📦 **Single File Packaging** - Bundle all game assets into one `.rbk` file
 
-- ⚡ *Fast Dictionary Access* - Get assets with simple `pak\["filename"]` syntax
+- ⚡ **Fast Dictionary Access** - Get assets with simple `pak\["filename"]` syntax
 
-- 🔧 *Lazy Loading* - Files are only decompressed when accessed
+- 🔧 **Lazy Loading** - Files are only decompressed when accessed
 
-- ✅ *Data Integrity* - CRC32 checksums prevent corruption
+- ✅ **Data Integrity** - CRC32 checksums prevent corruption
 
 ## Why RBPak?
 
 Created as the official asset management system for *Project32*, RBPak solves common game development challenges:
 
-- *Simple Distribution*: Ship one `.rbk` file instead of hundreds of loose assets
+- **Simple Distribution**: Ship one `.rbk` file instead of hundreds of loose assets
 
-- *Fast Loading*: Pre-compressed assets load quickly on older hardware
+- **Fast Loading**: Pre-compressed assets load quickly on older hardware
 
-- *Clean Code*: Dictionary-style access keeps game code readable
+- **Clean Code**: Dictionary-style access keeps game code readable
 
-- *Easy To Use*: Just add the static libary and it's headers and then you can implement a filesystem/assetmanager with RBPak
+- **Easy To Use**: Just add the static libary and it's headers and then you can implement a filesystem/assetmanager with RBPak
 
 ## About RBPak
 
