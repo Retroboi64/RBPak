@@ -1,176 +1,292 @@
+/*
+ * RBPak - Example Usage
+ * Demonstrates how to use the RBPak library
+ * Requires C++20 compiler
+ */
+
 #include "pak.h"
 #include <iostream>
-#include <vector>
-#include <filesystem>
-#include <cmath>
+#include <fstream>
 
-#ifndef M_PI
-#define M_PI 3.141592
-#endif
+using namespace rbpak;
 
-static void example_basic_usage() {
-    std::cout << "\n=== Basic RBPak Example ===" << std::endl;
+// Progress callback example
+void ProgressReporter(size_t current, size_t total, std::string_view filename) {
+    std::cout << "[" << current << "/" << total << "] Processing: " << filename << std::endl;
+}
 
-    RBPak pak;
+// Example 1: Basic usage - Create a package
+void Example_CreatePackage() {
+    std::cout << "\n=== Example 1: Create Package ===" << std::endl;
 
-    RBPak::print_config_info();
+    // Create package with default settings
+    Package pak;
 
-    std::vector<uint8_t> test_data = { 'H', 'e', 'l', 'l', 'o', ' ', 'R', 'B', 'K', '!' };
-    std::vector<uint8_t> sprite_data;
-    std::vector<uint8_t> sound_data;
+    // Add files from memory
+    std::string text = "Hello, RBPak!";
+    ByteArray data(text.begin(), text.end());
 
-    sprite_data.resize(32 * 32 * 4);
-    for (size_t i = 0; i < sprite_data.size(); i += 4) {
-        sprite_data[i] = static_cast<uint8_t>((i / 4) % 256);     // Red
-        sprite_data[i + 1] = static_cast<uint8_t>((i / 8) % 256); // Green
-        sprite_data[i + 2] = static_cast<uint8_t>((i / 16) % 256);// Blue
-        sprite_data[i + 3] = 255;           // Alpha
-    }
-
-    // Generate some fake sound data
-    sound_data.resize(44100); // 1 second of 8-bit mono
-    for (size_t i = 0; i < sound_data.size(); i++) {
-        double sample = std::sin(static_cast<double>(i) * 440.0 * 2.0 * 3.141592 / 44100.0) * 127.0 + 128.0;
-        sound_data[i] = static_cast<uint8_t>(sample);
-    }
-
-    std::cout << "Adding files to RBK package..." << std::endl;
-
-    pak.add_file("readme.txt", test_data);
-    pak.add_file("sprites/player.rgba", sprite_data);
-    pak.add_encrypted_file("sounds/jump.wav", sound_data); // This will be encrypted if enabled
-
-    if (std::filesystem::exists("config.json")) {
-        pak.add_file_from_disk("config.json", "config.json");
-        std::cout << "Added config.json from disk" << std::endl;
-    }
-
-    if (pak.save_to_file("demo_assets.rbk")) {
-        std::cout << "* Created demo_assets.rbk successfully!" << std::endl;
+    if (auto result = pak.Add("hello.txt", data); result) {
+        std::cout << "Added hello.txt" << std::endl;
     }
     else {
-        std::cout << "X Failed to create RBK file!" << std::endl;
+        std::cout << "Error: " << result.message << std::endl;
+    }
+
+    // Add more data
+    ByteArray binary = { 0x89, 0x50, 0x4E, 0x47 }; // PNG header
+    pak.Add("image.png", binary);
+
+    // Save package
+    if (auto result = pak.Save("example.pak"); result) {
+        std::cout << "Package saved successfully!" << std::endl;
+        pak.PrintStatistics();
+    }
+    else {
+        std::cout << "Save failed: " << result.message << std::endl;
+    }
+}
+
+// Example 2: Secure package with encryption
+void Example_SecurePackage() {
+    std::cout << "\n=== Example 2: Secure Package ===" << std::endl;
+
+    // Create secure package
+    PackageConfig config = PackageConfig::Secure("MySecretKey123");
+    config.compression = CompressionLevel::Best;
+
+    Package pak(config);
+
+    // Add sensitive data
+    std::string secret = "This is encrypted data!";
+    pak.Add("secret.txt", ByteArray(secret.begin(), secret.end()));
+
+    // Save with encryption
+    if (auto result = pak.Save("secure.pak"); result) {
+        std::cout << "Secure package created!" << std::endl;
+        pak.PrintStatistics();
+    }
+}
+
+// Example 3: Load and extract files
+void Example_LoadAndExtract() {
+    std::cout << "\n=== Example 3: Load and Extract ===" << std::endl;
+
+    Package pak;
+
+    // Load existing package
+    if (auto result = pak.Load("example.pak"); !result) {
+        std::cout << "Failed to load: " << result.message << std::endl;
         return;
     }
 
-    std::cout << "\n--- Loading RBK Package ---" << std::endl;
-    RBPak loader;
-    if (loader.load_from_file("demo_assets.rbk")) {
-        std::cout << "* Loaded demo_assets.rbk successfully!" << std::endl;
+    std::cout << "Package loaded successfully!" << std::endl;
+    std::cout << "Files in package:" << std::endl;
 
-        auto readme = loader["readme.txt"];
-        std::string readme_content(readme.begin(), readme.end());
-        std::cout << "README content: " << readme_content << std::endl;
+    // List all files
+    for (const auto& filename : pak.List()) {
+        std::cout << "  - " << filename;
 
-        auto sprite = loader["sprites/player.rgba"];
-        std::cout << "Player sprite: " << sprite.size() << " bytes loaded" << std::endl;
-
-        auto sound = loader["sounds/jump.wav"];
-        std::cout << "Jump sound: " << sound.size() << " bytes loaded";
-        if (sound.size() > 0) {
-            std::cout << " (encrypted: " << (RBKConfig::ENCRYPTION_ENABLED ? "YES" : "NO") << ")";
+        // Get file info
+        if (auto info = pak.GetFileInfo(filename)) {
+            std::cout << " (" << pak_utils::FormatSize(info->uncompressed_size) << ")";
         }
         std::cout << std::endl;
+    }
 
-        auto files = loader.get_file_list();
-        std::cout << "\nFiles in RBK package:" << std::endl;
-        for (const auto& file : files) {
-            auto data = loader[file];
-            std::cout << "  * " << file << " (" << data.size() << " bytes)" << std::endl;
-        }
+    // Extract specific file
+    if (auto data = pak.Get("hello.txt")) {
+        std::string content(data->begin(), data->end());
+        std::cout << "\nContent of hello.txt: " << content << std::endl;
+    }
 
-        std::cout << "\nTotal files: " << loader.get_file_count() << std::endl;
+    // Extract to file
+    if (auto result = pak.Extract("hello.txt", "extracted_hello.txt"); result) {
+        std::cout << "Extracted to extracted_hello.txt" << std::endl;
+    }
+
+    // Extract all files
+    if (auto result = pak.ExtractAll("extracted/"); result) {
+        std::cout << "All files extracted to extracted/" << std::endl;
+    }
+}
+
+// Example 4: Working with directories
+void Example_AddDirectory() {
+    std::cout << "\n=== Example 4: Add Directory ===" << std::endl;
+
+    // Create some test files first
+    std::ofstream("test_data/file1.txt") << "File 1 content";
+    std::ofstream("test_data/file2.txt") << "File 2 content";
+    std::ofstream("test_data/subdir/file3.txt") << "File 3 content";
+
+    Package pak;
+
+    // Add entire directory recursively with progress
+    if (auto result = pak.AddDirectory("test_data", true, ProgressReporter); result) {
+        std::cout << "\nDirectory added successfully!" << std::endl;
+        pak.PrintStatistics();
+        pak.Save("directory.pak");
     }
     else {
-        std::cout << "X Failed to load RBK file!" << std::endl;
+        std::cout << "Failed: " << result.message << std::endl;
     }
 }
 
-static void example_engine_integration() {
-    std::cout << "\n=== Engine Integration Example ===" << std::endl;
+// Example 5: Advanced usage - Multiple files
+void Example_MultipleFiles() {
+    std::cout << "\n=== Example 5: Add Multiple Files ===" << std::endl;
 
-    class Project32AssetManager {
-    private:
-        RBPak sprites_, sounds_, levels_;
+    Package pak;
 
-    public:
-        bool load_game_assets() {
-            std::cout << "Project32: Loading game assets..." << std::endl;
+    // Prepare multiple files
+    std::vector<std::pair<std::string, ByteArray>> files;
 
-            bool success = true;
+    for (int i = 0; i < 5; i++) {
+        std::string name = "file" + std::to_string(i) + ".txt";
+        std::string content = "Content of file " + std::to_string(i);
+        files.emplace_back(name, ByteArray(content.begin(), content.end()));
+    }
 
-            RBPak demo_pack;
-            std::vector<uint8_t> demo_sprite = { 0x89, 0x50, 0x4E, 0x47 };
-            std::vector<uint8_t> demo_sound = { 0x52, 0x49, 0x46, 0x46 };
-
-            demo_pack.add_file("sprites/hero.png", demo_sprite);
-            demo_pack.add_encrypted_file("sounds/bgm.wav", demo_sound);
-            demo_pack.save_to_file("game_assets.rbk");
-
-            success = success && sprites_.load_from_file("game_assets.rbk");
-
-            if (success) {
-                std::cout << "* All asset packs loaded successfully!" << std::endl;
-            }
-
-            return success;
-        }
-
-        std::vector<uint8_t> get_sprite(const std::string& name) {
-            return sprites_["sprites/" + name];
-        }
-
-        std::vector<uint8_t> get_sound(const std::string& name) {
-            return sprites_["sounds/" + name];
-        }
-
-        void print_stats() {
-            std::cout << "Asset Statistics:" << std::endl;
-            std::cout << "  Sprites loaded: " << sprites_.get_file_count() << std::endl;
-        }
-    };
-
-    Project32AssetManager assets;
-    if (assets.load_game_assets()) {
-        auto hero_sprite = assets.get_sprite("hero.png");
-        auto bgm = assets.get_sound("bgm.wav");
-
-        std::cout << "Loaded hero sprite: " << hero_sprite.size() << " bytes" << std::endl;
-        std::cout << "Loaded background music: " << bgm.size() << " bytes" << std::endl;
-
-        assets.print_stats();
-
-        std::cout << "* Project32 integration demo complete!" << std::endl;
+    // Add all at once with progress
+    if (auto result = pak.AddMultiple(files, ProgressReporter); result) {
+        std::cout << "\nAll files added!" << std::endl;
+        pak.Save("multiple.pak");
     }
 }
 
-static void print_help() {}
+// Example 6: File management
+void Example_FileManagement() {
+    std::cout << "\n=== Example 6: File Management ===" << std::endl;
 
-int main(int argc, char* argv[]) {
-    if (argc > 1) {
-        std::string arg = argv[1];
-        if (arg == "--help" || arg == "-h") {
-            print_help();
-            return 0;
-        }
-        else if (arg == "--version") {
-            return 0;
-        }
-        else if (arg == "--config") {
-            RBPak::print_config_info();
-            return 0;
-        }
+    Package pak;
+    pak.Load("example.pak");
+
+    // Check if file exists
+    if (pak.Has("hello.txt")) {
+        std::cout << "hello.txt exists in package" << std::endl;
     }
 
-    std::cout << "Asset packaging system" << std::endl;
-    std::cout << std::string(60, '=') << std::endl;
+    // Get detailed file information
+    for (const auto& info : pak.ListDetailed()) {
+        std::cout << "\nFile: " << info.name << std::endl;
+        std::cout << "  Stored as: " << info.stored_name << std::endl;
+        std::cout << "  Size: " << pak_utils::FormatSize(info.uncompressed_size) << std::endl;
+        std::cout << "  Compressed: " << pak_utils::FormatSize(info.compressed_size) << std::endl;
+        std::cout << "  Ratio: " << (info.GetCompressionRatio() * 100.0f) << "%" << std::endl;
+        std::cout << "  Encrypted: " << (info.is_encrypted ? "Yes" : "No") << std::endl;
+        std::cout << "  CRC32: 0x" << std::hex << info.crc32 << std::dec << std::endl;
+    }
+
+    // Remove a file
+    if (pak.Remove("hello.txt")) {
+        std::cout << "\nRemoved hello.txt from package" << std::endl;
+    }
+
+    // Save modified package
+    pak.Save("modified.pak");
+}
+
+// Example 7: Fast loading configuration
+void Example_FastLoading() {
+    std::cout << "\n=== Example 7: Fast Loading ===" << std::endl;
+
+    // Use fast loading configuration
+    PackageConfig config = PackageConfig::FastLoad();
+    Package pak(config);
+
+    pak.Add("data.bin", ByteArray(1024 * 1024, 0xFF)); // 1MB of data
+    pak.Save("fast.pak");
+
+    std::cout << "Package optimized for fast loading!" << std::endl;
+}
+
+// Example 8: Error handling
+void Example_ErrorHandling() {
+    std::cout << "\n=== Example 8: Error Handling ===" << std::endl;
+
+    Package pak;
+
+    // Try to load non-existent package
+    if (auto result = pak.Load("nonexistent.pak"); !result) {
+        std::cout << "Expected error: " << result.message << std::endl;
+        std::cout << "Error code: " << pak_utils::GetErrorMessage(result.error) << std::endl;
+    }
+
+    // Try to add invalid data
+    if (auto result = pak.Add("", ByteArray{}); !result) {
+        std::cout << "Expected error: " << result.message << std::endl;
+    }
+
+    // Check last error
+    if (pak.GetLastError() != PackageError::None) {
+        std::cout << "Last error: " << pak_utils::GetErrorMessage(pak.GetLastError()) << std::endl;
+    }
+}
+
+// Example 9: Cache management
+void Example_CacheManagement() {
+    std::cout << "\n=== Example 9: Cache Management ===" << std::endl;
+
+    PackageConfig config;
+    config.lazy_load = true;
+    config.max_cache_size = 10 * 1024 * 1024; // 10MB cache
+
+    Package pak(config);
+    pak.Load("example.pak");
+
+    // Access files (will be cached)
+    auto data1 = pak["hello.txt"];
+    auto data2 = pak["image.png"];
+
+    std::cout << "Cache size: " << pak_utils::FormatSize(pak.GetCacheSize()) << std::endl;
+
+    // Clear cache
+    pak.ClearCache();
+    std::cout << "Cache cleared" << std::endl;
+}
+
+// Example 10: Operator overload usage
+void Example_OperatorOverload() {
+    std::cout << "\n=== Example 10: Operator Overload ===" << std::endl;
+
+    Package pak;
+    pak.Load("example.pak");
+
+    // Use [] operator to access files
+    if (auto data = pak["hello.txt"]) {
+        std::string content(data->begin(), data->end());
+        std::cout << "Using [] operator: " << content << std::endl;
+    }
+}
+
+int main() {
+    std::cout << "==================================" << std::endl;
+    std::cout << "    RBPak Library Examples" << std::endl;
+    std::cout << "    Requires C++20 compiler" << std::endl;
+    std::cout << "==================================" << std::endl;
 
     try {
-        example_basic_usage();
-        example_engine_integration();
+        Example_CreatePackage();
+        Example_LoadAndExtract();
+        Example_SecurePackage();
+        Example_MultipleFiles();
+        Example_FileManagement();
+        Example_FastLoading();
+        Example_ErrorHandling();
+        Example_CacheManagement();
+        Example_OperatorOverload();
+
+        // Uncomment if you have a test_data directory
+        // Example_AddDirectory();
+
+        std::cout << "\n==================================" << std::endl;
+        std::cout << "All examples completed!" << std::endl;
+        std::cout << "==================================" << std::endl;
+
     }
     catch (const std::exception& e) {
-        std::cerr << "Error: " << e.what() << std::endl;
+        std::cerr << "Exception: " << e.what() << std::endl;
         return 1;
     }
 

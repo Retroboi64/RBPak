@@ -1,91 +1,195 @@
+/*
+ * RBPak - Retroboi64's Package System
+ * A compact yet powerful file packaging system for game engines
+ * Copyright (c) 2025 Patrick Reese (Retroboi64)
+ *
+ * Licensed under MIT
+ * See LICENSE file for full terms
+ * GitHub: https://github.com/Retroboi64/RBPak
+ */
+
 #pragma once
 
-#include <string>
-#include <unordered_map>
-#include <vector>
-#include <fstream>
+#include <cstdint>
 #include <memory>
-#include <cstring>
-#include <array>
+#include <optional>
+#include <string>
+#include <vector>
+#include <string_view>
+#include <span>
+#include <functional>
 
-#include "pak_config.h"
+namespace rbpak {
+    using ByteArray = std::vector<uint8_t>;
 
-struct RBKEntry {
-    std::string name;
-    std::string original_name;
-    uint32_t offset;
-    uint32_t compressed_size;
-    uint32_t uncompressed_size;
-    uint32_t crc32;
-    uint32_t name_hash;
-    std::vector<uint8_t> data;
-    bool is_loaded;
-    bool is_encrypted;
+    enum class CompressionLevel : uint8_t {
+        None = 0,
+        Fast = 1,
+        Balanced = 6,
+        Best = 9
+    };
 
-    RBKEntry() : offset(0), compressed_size(0), uncompressed_size(0),
-        crc32(0), name_hash(0), is_loaded(false), is_encrypted(false) {
-    }
-};
+    enum class EncryptionMethod : uint8_t {
+        None = 0,
+        XOR = 1,
+        AES = 2  // Future expansion
+    };
 
-class SimpleXORCipher {
-private:
-    std::vector<uint8_t> key_;
+    enum class PackageFlags : uint32_t {
+        None = 0,
+        Compressed = 1 << 0,
+        Encrypted = 1 << 1,
+        ObfuscatedNames = 1 << 2,
+        ChecksumVerified = 1 << 3
+    };
 
-public:
-    SimpleXORCipher(const std::vector<uint8_t>& key) : key_(key) {}
+    enum class PackageError {
+        None,
+        FileNotFound,
+        InvalidSignature,
+        CorruptedData,
+        DecryptionFailed,
+        CompressionFailed,
+        DecompressionFailed,
+        ChecksumMismatch,
+        IOError,
+        InvalidParameter,
+        OutOfMemory,
+        AccessDenied
+    };
 
-    void encrypt_decrypt(uint8_t* data, size_t length) {
-        if (key_.empty()) return;
+    struct PackageResult {
+        bool success;
+        PackageError error;
+        std::string message;
 
-        for (size_t i = 0; i < length; i++) {
-            data[i] ^= key_[i % key_.size()];
+        static PackageResult Success() {
+            return { true, PackageError::None, "" };
         }
+
+        static PackageResult Failure(PackageError err, std::string_view msg) {
+            return { false, err, std::string(msg) };
+        }
+
+        explicit operator bool() const { return success; }
+    };
+
+    struct PackageConfig {
+        CompressionLevel compression{ CompressionLevel::Balanced };
+        EncryptionMethod encryption{ EncryptionMethod::None };
+        std::string encryption_key;
+        bool obfuscate_filenames{ false };
+        bool verify_checksums{ true };
+        bool lazy_load{ true };
+        size_t max_cache_size{ 100 * 1024 * 1024 }; // 100MB default cache
+
+        static PackageConfig Default() {
+            return PackageConfig{};
+        }
+
+        static PackageConfig Secure(std::string_view key) {
+            PackageConfig cfg;
+            cfg.encryption = EncryptionMethod::XOR;
+            cfg.encryption_key = key;
+            cfg.obfuscate_filenames = true;
+            cfg.verify_checksums = true;
+            return cfg;
+        }
+
+        static PackageConfig FastLoad() {
+            PackageConfig cfg;
+            cfg.compression = CompressionLevel::Fast;
+            cfg.verify_checksums = false;
+            cfg.lazy_load = false;
+            return cfg;
+        }
+
+        [[nodiscard]] bool IsValid() const {
+            if (encryption != EncryptionMethod::None && encryption_key.empty()) {
+                return false;
+            }
+            return true;
+        }
+    };
+
+    struct FileInfo {
+        std::string name;
+        std::string stored_name;
+        uint32_t uncompressed_size;
+        uint32_t compressed_size;
+        uint32_t crc32;
+        bool is_encrypted;
+        bool is_loaded;
+
+        [[nodiscard]] float GetCompressionRatio() const {
+            if (uncompressed_size == 0) return 0.0f;
+            return 1.0f - (static_cast<float>(compressed_size) / uncompressed_size);
+        }
+    };
+
+    using ProgressCallback = std::function<void(size_t current, size_t total, std::string_view filename)>;
+
+    class Package {
+    public:
+        explicit Package(const PackageConfig& config = PackageConfig::Default());
+        ~Package();
+
+        Package(const Package&) = delete;
+        Package& operator=(const Package&) = delete;
+        Package(Package&&) noexcept;
+        Package& operator=(Package&&) noexcept;
+
+        [[nodiscard]] PackageResult Add(std::string_view name, std::span<const uint8_t> data);
+        [[nodiscard]] PackageResult Add(std::string_view name, const ByteArray& data);
+        [[nodiscard]] PackageResult AddFromFile(std::string_view name, std::string_view filepath);
+
+        [[nodiscard]] PackageResult AddDirectory(std::string_view directory, bool recursive = true,
+            ProgressCallback callback = nullptr);
+        [[nodiscard]] PackageResult AddMultiple(const std::vector<std::pair<std::string, ByteArray>>& files,
+            ProgressCallback callback = nullptr);
+
+        [[nodiscard]] std::optional<ByteArray> Get(std::string_view name);
+        [[nodiscard]] PackageResult Extract(std::string_view name, std::string_view output_path);
+        [[nodiscard]] PackageResult ExtractAll(std::string_view output_directory,
+            ProgressCallback callback = nullptr);
+
+        [[nodiscard]] bool Remove(std::string_view name);
+        [[nodiscard]] bool Has(std::string_view name) const;
+        [[nodiscard]] std::optional<FileInfo> GetFileInfo(std::string_view name) const;
+
+        [[nodiscard]] PackageResult Save(std::string_view filepath, ProgressCallback callback = nullptr);
+        [[nodiscard]] PackageResult Load(std::string_view filepath);
+        void Clear() noexcept;
+
+        [[nodiscard]] std::vector<std::string> List() const;
+        [[nodiscard]] std::vector<FileInfo> ListDetailed() const;
+        [[nodiscard]] size_t GetFileCount() const noexcept;
+        [[nodiscard]] size_t GetTotalSize() const noexcept;
+        [[nodiscard]] size_t GetCompressedSize() const noexcept;
+        [[nodiscard]] float GetCompressionRatio() const noexcept;
+
+        void ClearCache() noexcept;
+        [[nodiscard]] size_t GetCacheSize() const noexcept;
+
+        void PrintStatistics() const;
+        [[nodiscard]] const PackageConfig& GetConfig() const noexcept;
+        [[nodiscard]] PackageError GetLastError() const noexcept;
+
+        [[nodiscard]] std::optional<ByteArray> operator[](std::string_view name);
+
+    private:
+        class Impl;
+        std::unique_ptr<Impl> m_impl;
+    };
+
+    namespace pak_utils {
+        [[nodiscard]] uint32_t CalculateCRC32(std::span<const uint8_t> data);
+        [[nodiscard]] uint32_t CalculateCRC32(const uint8_t* data, size_t size);
+        [[nodiscard]] std::string ObfuscateName(std::string_view name);
+        [[nodiscard]] bool ValidatePackageFile(std::string_view filepath);
+        [[nodiscard]] std::string FormatSize(size_t bytes);
+        [[nodiscard]] std::string GetErrorMessage(PackageError error);
+
+        [[nodiscard]] bool SecureCompare(uint32_t a, uint32_t b);
     }
-};
-
-class RBPak {
-private:
-    static const uint32_t RBK_SIGNATURE = 0x024B5252;
-    std::unordered_map<std::string, std::unique_ptr<RBKEntry>> entries_;
-    std::unordered_map<uint32_t, std::string> hash_to_name_;
-    std::string file_path_;
-    std::ifstream file_stream_;
-    std::array<uint8_t, 32> encryption_key_;
-    bool encryption_initialized_;
-
-    void initialize_encryption();
-    std::array<uint8_t, 32> derive_key_from_string(const std::string& key_string);
-    bool encrypt_data(const uint8_t* input, size_t input_size, std::vector<uint8_t>& output);
-    bool decrypt_data(const uint8_t* input, size_t input_size, std::vector<uint8_t>& output);
-
-    bool compress_data_level(const uint8_t* input, size_t input_size, std::vector<uint8_t>& output, int level);
-
-    uint32_t calculate_crc32(const uint8_t* data, size_t length);
-    bool compress_data(const uint8_t* input, size_t input_size, std::vector<uint8_t>& output);
-    bool decompress_data(const uint8_t* input, size_t input_size, std::vector<uint8_t>& output, size_t expected_size);
-    uint32_t hash_filename(const std::string& filename);
-    std::string obfuscate_filename(const std::string& original);
-
-public:
-    RBPak();
-    ~RBPak();
-
-    bool add_file(const std::string& name, const std::vector<uint8_t>& data);
-    bool add_file_from_disk(const std::string& name, const std::string& file_path);
-    bool add_encrypted_file(const std::string& name, const std::vector<uint8_t>& data);
-    bool save_to_file(const std::string& file_path);
-
-    bool load_from_file(const std::string& file_path);
-    bool has_file(const std::string& name) const;
-    std::vector<uint8_t> get_file(const std::string& name);
-    std::vector<std::string> get_file_list() const;
-
-    size_t get_file_count() const;
-    void clear();
-
-    std::vector<uint8_t> operator[](const std::string& name);
-
-    static void print_config_info();
-
-    uint32_t hash_murmur_filename(const std::string& filename);
-};
+} 
